@@ -258,14 +258,6 @@ def analyze_game(game_id):
             analyze_team(home_players, away_players)
 
 
-def write_to_mongo():
-    goalie_stats = list(global_goalies.values())
-    GOALIE_COLLECTION.delete_many({})
-    GOALIE_COLLECTION.insert_many(goalie_stats)
-    AGGREGATE_COLLECTION.delete_many({})
-    AGGREGATE_COLLECTION.insert_one(aggregates)
-
-
 def main():
     SESSION.mount("https://www.hockey-reference.com", gateway)
 
@@ -280,10 +272,8 @@ def main():
 
     aggregates["num_players"] = len(global_players)
     set_goalie_names()
-
     finalize_player_aggregates()
 
-    # REMEMBER TO SHUT GATEWAY DOWN
     # write_to_mongo()
     gateway.shutdown()
 
