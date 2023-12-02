@@ -4,7 +4,7 @@ from constants import *
 import pymongo
 import requests
 from requests_ip_rotator import ApiGateway
-from sample_nhl_data import GAME_IDS
+from sample_nhl_data import OVERWRITE_DATA_GAME_IDS, UPDATE_GAME_IDS
 
 
 # CONSTANTS
@@ -21,13 +21,13 @@ SESSION = requests.Session()
 BOX_SCORES_URL = ('https://www.hockey-reference.com/boxscores/index.fcgi?'
                   'month=%s&day=%s&year=%s')
 
-GOALIE_IDS = ["mrazepe01", "merzlel01", "gibsojo02", "allenja01", "binnijo01", "bobrose01",
-              "campbja01", "reimeja01", "luukkuk01", "vejmeka01", "hussovi01", "jonesma02",
-              "marksja02", "copleph01", "demkoth01", "talboca01", "murrama02", "anderfr01",
-              "vanecvi01", "thomplo01", "hartca01", "georgal01", "jarrytr01", "kuempda01",
-              "sarosju01", "sorokil01", "ullmali01", "shestig01", "oettija01", "vasilan02",
-              "helleco01", "fleurma01", "raantan01", "korpijo01", "desmica01", "samsoil01",
-              "skinnst01", "blackma01", "forsban01"]
+GOALIE_IDS = ["allenja01", "anderfr01", "binnijo01", "blackma01", "blackma01", "bobrose01", "brossla01", "campbja01",
+              "copleph01", "demkoth01", "desmica01", "dostalu01", "fleurma01", "forsban01", "georgal01", "gibsojo02",
+              "grubaph01", "gustafi01", "hartca01", "helleco01", "hillad01", "hussovi01", "jarrytr01", "johanjo03",
+              "jonesma02", "kahkoka01", "korpijo01", "kuempda01", "levide01", "luukkuk01", "marksja02", "merzlel01",
+              "montesa01", "mrazepe01", "murrama02", "oettija01","quickjo01", "raantan01", "reimeja01", "samsoil01",
+              "sarosju01", "schmiak01", "shestig01", "skinnje01", "skinnst01", "sorokil01", "swaymje01", "talboca01",
+              "thomplo01", "ullmali01", "vanecvi01", "varlasi01", "vasilan02", "vejmeka01", "wedgesc01", "wolljo01"]
 
 # GLOBAL VARIABLES
 global_goalies = {}
@@ -142,7 +142,8 @@ def breakdown_scorers(goalscorers):
         player_id = gs['player_id']
         if player_id in global_players.keys():
             game_players.append({"goals": gs['goals'], "position": global_players[player_id]["position"],
-                                 "dexterity": global_players[player_id]["dexterity"], "Name": global_players[player_id]["Name"],
+                                 "dexterity": global_players[player_id]["dexterity"],
+                                 "Name": global_players[player_id]["Name"],
                                  "team": global_players[player_id]["team"]})
         else:
             data = get_player_info(player_id)
@@ -153,7 +154,8 @@ def breakdown_scorers(goalscorers):
                 dexterity = data[4].strip().lower()
                 name = data[-2]
                 team = data[-1]
-                game_players.append({"goals": gs['goals'], "position": position, "dexterity": dexterity, "Name": name, "team": team})
+                game_players.append({"goals": gs['goals'], "position": position, "dexterity": dexterity,
+                                     "Name": name, "team": team})
                 global_players[player_id] = {"position": position, "dexterity": dexterity, "Name": name, "team": team}
     return game_players
 
@@ -258,23 +260,72 @@ def analyze_game(game_id):
             analyze_team(home_players, away_players)
 
 
+def mongo_overwrite():
+    goalie_stats = list(global_goalies.values())
+    GOALIE_COLLECTION.delete_many({})
+    GOALIE_COLLECTION.insert_many(goalie_stats)
+    AGGREGATE_COLLECTION.delete_many({})
+    AGGREGATE_COLLECTION.insert_one(aggregates)
+
+
+def mongo_update():
+    print("within update function...")
+    goalie_stats = list(global_goalies.values())
+    for goalie in goalie_stats:
+        mongo_document = GOALIE_COLLECTION.find_one({'hockey_ref_id': goalie["hockey_ref_id"]})
+        GOALIE_COLLECTION.find_one_and_update({'hockey_ref_id': goalie["hockey_ref_id"]},
+                                              {'$set': {"GA": mongo_document['GA'] + goalie['GA'],
+                                                        "HL_GA": mongo_document['HL_GA'] + goalie['HL_GA'],
+                                                        "HR_GA": mongo_document['HR_GA'] + goalie['HR_GA'],
+                                                        "PL_GA": mongo_document['PL_GA'] + goalie['PL_GA'],
+                                                        "PC_GA": mongo_document['PC_GA'] + goalie['PC_GA'],
+                                                        "PR_GA": mongo_document['PR_GA'] + goalie['PR_GA'],
+                                                        "PD_GA": mongo_document['PD_GA'] + goalie['PD_GA'],
+                                                        "HLPL_GA": mongo_document['HLPL_GA'] + goalie['HLPL_GA'],
+                                                        "HLPR_GA": mongo_document['HLPR_GA'] + goalie['HLPR_GA'],
+                                                        "HLPC_GA": mongo_document['HLPC_GA'] + goalie['HLPC_GA'],
+                                                        "HLPD_GA": mongo_document['HLPD_GA'] + goalie['HLPD_GA'],
+                                                        "HRPL_GA": mongo_document['HRPL_GA'] + goalie['HRPL_GA'],
+                                                        "HRPR_GA": mongo_document['HRPR_GA'] + goalie['HRPR_GA'],
+                                                        "HRPC_GA": mongo_document['HRPC_GA'] + goalie['HRPC_GA'],
+                                                        "HRPD_GA": mongo_document['HRPD_GA'] + goalie['HRPD_GA'],
+                                                        # add the update goalies make sure to update this
+                                                        "goal_details_2023_Q2": goalie['goal_details']
+                                                        }})
+
+
 def main():
     SESSION.mount("https://www.hockey-reference.com", gateway)
 
-    # # Makes 1 call for each day
+    # GENERATE GAME IDS FOR A DATE RANGE
     # game_ids = generate_game_ids(format_days())
-    num_games = len(GAME_IDS)
+    # for game in game_ids:
+    #     print('"' + game + '",')
+
+    num_games = len(OVERWRITE_DATA_GAME_IDS)
     aggregates["num_games"] = num_games
     print(f"Analyzing {num_games} games..")
     for i in range(num_games):
-        print(f"Analyzing game: {GAME_IDS[i]}")
-        analyze_game(GAME_IDS[i])
+        print(f"Analyzing game: {OVERWRITE_DATA_GAME_IDS[i]}")
+        analyze_game(OVERWRITE_DATA_GAME_IDS[i])
 
     aggregates["num_players"] = len(global_players)
     set_goalie_names()
-    finalize_player_aggregates()
 
-    # write_to_mongo()
+    finalize_player_aggregates()
+    print(global_goalies)
+
+    # CONFIRM OPERATION
+    mongo_operation_valid = input("Do you have the correct mongo operation commented out?\n"
+                                  "If updating, is the name of the new goal_details attribute correct according to the date?\n"
+                                  "Final Check.. \n"
+                                  "Y - Continue \n"
+                                  "N - Stop \n")
+    if mongo_operation_valid == 'Y':
+        mongo_overwrite()
+        # mongo_update()
+
+    # REMEMBER TO SHUT GATEWAY DOWN
     gateway.shutdown()
 
 
