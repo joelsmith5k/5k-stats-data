@@ -12,8 +12,8 @@ DATABASE = pymongo.MongoClient(MONGO_CONNECTION_STRING)[NHL_DB_NAME]
 GOALIE_COLLECTION = DATABASE[NHL_GOALIE_COLLECTION]
 AGGREGATE_COLLECTION = DATABASE[NHL_AGGREGATE_COLLECTION]
 
-gateway = ApiGateway("https://www.hockey-reference.com", access_key_id=ACCESS_KEY,
-                     access_key_secret=SECRET_ACCESS_KEY)
+gateway = ApiGateway("https://www.hockey-reference.com", access_key_id=AWS_ACCESS_KEY,
+                     access_key_secret=AWS_SECRET_ACCESS_KEY)
 gateway.start()
 
 SESSION = requests.Session()
@@ -269,7 +269,6 @@ def mongo_overwrite():
 
 
 def mongo_update():
-    print("within update function...")
     goalie_stats = list(global_goalies.values())
     for goalie in goalie_stats:
         mongo_document = GOALIE_COLLECTION.find_one({'hockey_ref_id': goalie["hockey_ref_id"]})
@@ -315,15 +314,19 @@ def main():
     finalize_player_aggregates()
     print(global_goalies)
 
-    # CONFIRM OPERATION
-    mongo_operation_valid = input("Do you have the correct mongo operation commented out?\n"
-                                  "If updating, is the name of the new goal_details attribute correct according to the date?\n"
-                                  "Final Check.. \n"
-                                  "Y - Continue \n"
-                                  "N - Stop \n")
-    if mongo_operation_valid == 'Y':
+    # SELECT MONGO OPERATION
+    mongo_operation = input("Select desired database operation.\n"
+                            "O - Overwrite\n"
+                            "U - Update\n"
+                            "Any Other Character - Exit\n")
+
+    if mongo_operation.lower() == 'o':
         mongo_overwrite()
-        # mongo_update()
+
+    elif mongo_operation.lower() == 'u':
+        mongo_update()
+    else:
+        print("Program exiting with no database operation.")
 
     # REMEMBER TO SHUT GATEWAY DOWN
     gateway.shutdown()
